@@ -1,0 +1,146 @@
+name: Shared Ontology QA + Docs
+
+on:
+  workflow_call:
+    inputs:
+      main_ontology: { required: true, type: string }
+      shapes_glob:   { required: false, type: string, default: "shapes/**/*.ttl" }
+      data_glob:     { required: false, type: string, default: "data/**/*.ttl" }
+      reasoner:      { required: false, type: string, default: "elk" }
+      docs:          { required: false, type: boolean, default: true }   # toggle docs build
+    secrets:
+      GH_TOKEN:      { required: false }
+
+permissions:
+  contents: read
+  pages: write           # needed for Pages deploy
+  id-token: write        # needed for Pages deploy OIDC
+
+jobs:
+
+  qa:
+    runs-on: ubuntu-latest
+    outputs:
+      reasoned_path: reports/reasoned.owl
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java for ROBOT + WIDOCO
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      # Python for pySHACL
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install pyshacl==0.25.0 rdflib==7.0.0
+
+      # Install ROBOT (simple jar alias)
+      - name: Install ROBOT
+        run: |
+          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
+          echo 'alias robot="java -jar $GITHUB_WORKSPACE/robot.jar"' >> $BASH_ENV
+          source $BASH_ENV
+
+      - name: Verify syntax & imports
+        run: |
+          mkdir -p reports
+          source $BASH_ENV
+          robot verify --input "${{ inputs.main_ontology }}" --fail-on ERROR --output reports/verify.txt
+
+      - name: Reasoning & consistency
+        run: |
+          source $BASH_ENV
+          robot reason \
+            --input "${{ inputs.main_ontology }}" \
+            --reasoner "${{ inputs.reasoner }}" \
+            --equivalent-classes-allowed all \
+            --exclude-tautologies structural \
+            --output reports/reasoned.owl
+          echo "Reasoning OK" > reports/reasoning.txt
+
+      - name: Structural report
+        run: |
+          source $BASH_ENV
+          robot report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv
+
+      - name: SHACL validation (A-Box)
+        if: inputs.shapes_glob != ''
+        run: |
+          python - <<'PY'
+          import glob, subprocess, sys
+          shapes = glob.glob("${{ inputs.shapes_glob }}", recursive=True)
+          data   = glob.glob("${{ inputs.data_glob }}",   recursive=True)
+          failed = 0
+          for s in shapes or []:
+            cmd = ["pyshacl","-s",s]
+            if data:
+              for d in data:
+                rc = subprocess.call(cmd+["-d", d, "-o", "turtle", "-r", "both"])
+                failed |= (rc != 0)
+            else:
+              rc = subprocess.call(cmd+["-d","${{ inputs.main_ontology }}","-o","turtle","-r","both"])
+              failed |= (rc != 0)
+          sys.exit(failed)
+          PY
+
+      - name: Upload QA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
+          path: reports
+
+  docs:
+    if: inputs.docs == true
+    needs: qa
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      # Pull the reasoned ontology & reports from the QA job
+      - name: Download QA artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: qa-reports
+          path: reports
+
+      # Install WIDOCO (doc generator)
+      - name: Install WIDOCO
+        run: |
+          curl -sL -o widoco.zip https://github.com/dgarijo/Widoco/releases/download/v1.4.20/widoco-1.4.20-jar-with-dependencies.jar.zip
+          unzip -q widoco.zip -d widoco
+          ls widoco > /dev/null
+
+      # Build docs from reasoned.owl (or fall back to main input if needed)
+      - name: Generate HTML docs with WIDOCO
+        run: |
+          REASONED="reports/reasoned.owl"
+          INPUT="${REASONED}"
+          if [ ! -f "$REASONED" ]; then INPUT="${{ inputs.main_ontology }}"; fi
+          java -jar widoco/*-with-dependencies.jar \
+            -ontFile "$INPUT" \
+            -outFolder site \
+            -rewriteAll \
+            -getOntologyMetadata \
+            -htaccess false \
+            -includeAnnotationProperties true
+          # Optionally add QA reports into the site
+          mkdir -p site/reports
+          cp -r reports/* site/reports/ || true
+
+      # Upload the static site as a Pages artifact
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
