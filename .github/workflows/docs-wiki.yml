@@ -4,6 +4,7 @@ name: GitHub Wiki Documentation
 # Currently a placeholder for future implementation
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:
