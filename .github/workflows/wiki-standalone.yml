@@ -1,33 +1,11 @@
-name: GitHub Wiki Documentation
+name: Generate standalone wiki documentation
 
 on:
-  workflow_call:
-    inputs:
-      diagrams_path:
-        description: 'Path glob pattern for diagram images to trigger on'
-        required: false
-        type: string
-        default: 'Graphol/diagrams/**'
-      docs_dir:
-        description: 'Output directory for generated docs'
-        required: false
-        type: string
-        default: 'docs'
-    secrets:
-      GH_TOKEN:
-        required: false
-  workflow_dispatch:
-    inputs:
-      diagrams_path:
-        description: 'Path glob pattern for diagram images to trigger on'
-        required: false
-        type: string
-        default: 'Graphol/diagrams/**'
-      docs_dir:
-        description: 'Output directory for generated docs'
-        required: false
-        type: string
-        default: 'docs'
+  gollum:  # Triggers on wiki page changes (create, edit, delete)
+  push:
+    paths:
+      - 'Graphol/diagrams/**'  # Trigger when images are updated
+  workflow_dispatch:  # Allow manual triggering
 
 permissions:
   contents: write
@@ -36,24 +14,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout calling repo
+      - name: Checkout main repo
         uses: actions/checkout@v4
-        with:
-          path: calling-repo
 
       - name: Checkout wiki repo
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}.wiki
           path: wiki
-
-      - name: Checkout OntoQA for script
-        uses: actions/checkout@v4
-        with:
-          repository: Airy59/OntoQA
-          path: ontoqa
-          sparse-checkout: |
-            scripts/docs-wiki.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -70,32 +38,28 @@ jobs:
         run: |
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           DATETIME="${{ steps.timestamp.outputs.datetime }}"
-          DOCS_DIR="${{ inputs.docs_dir || 'docs' }}"
-          
-          # Create docs directory in calling repo
-          mkdir -p "calling-repo/${DOCS_DIR}"
           
           # Clear images directory to avoid duplicates
-          rm -rf "calling-repo/${DOCS_DIR}/images"
-          mkdir -p "calling-repo/${DOCS_DIR}/images"
+          rm -rf docs/images
+          mkdir -p docs/images
           
           echo "Generating version with embedded images..."
-          python ontoqa/scripts/docs-wiki.py \
+          python scripts/wiki_standalone.py \
             --wiki-dir wiki \
-            --out "calling-repo/${DOCS_DIR}/${REPO_NAME}.md" \
+            --out "docs/${REPO_NAME}.md" \
             --repo "${{ github.repository }}" \
             --embed-images \
             --timestamp "${DATETIME}"
           
           echo "Generating version with image subfolder..."
-          python ontoqa/scripts/docs-wiki.py \
+          python scripts/wiki_standalone.py \
             --wiki-dir wiki \
-            --out "calling-repo/${DOCS_DIR}/${REPO_NAME}.md" \
+            --out "docs/${REPO_NAME}.md" \
             --repo "${{ github.repository }}" \
             --timestamp "${DATETIME}"
           
           echo "Generated files:"
-          ls -lh "calling-repo/${DOCS_DIR}/${REPO_NAME}"*.md
+          ls -lh docs/${REPO_NAME}*.md
 
       - name: Install Pandoc and LaTeX
         run: |
@@ -105,8 +69,7 @@ jobs:
       - name: Generate PDF and LaTeX
         run: |
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          DOCS_DIR="${{ inputs.docs_dir || 'docs' }}"
-          cd "calling-repo/${DOCS_DIR}"
+          cd docs
           
           # Generate PDF
           echo "Generating PDF..."
@@ -143,21 +106,19 @@ jobs:
             --variable linkcolor=blue \
             --variable urlcolor=blue
           
-          cd ../..
+          cd ..
           echo "Generated files:"
-          ls -lh "calling-repo/${DOCS_DIR}"/*.pdf "calling-repo/${DOCS_DIR}"/*.tex 2>/dev/null || true
+          ls -lh docs/*.pdf docs/*.tex 2>/dev/null || true
 
       - name: Commit & push changes
         run: |
           DATETIME="${{ steps.timestamp.outputs.datetime }}"
-          DOCS_DIR="${{ inputs.docs_dir || 'docs' }}"
-          cd calling-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${DOCS_DIR}"/*.md || true
-          git add "${DOCS_DIR}"/*.pdf || true
-          git add "${DOCS_DIR}"/*.tex || true
-          git add "${DOCS_DIR}"/images/ || true
+          git add docs/*.md || true
+          git add docs/*.pdf || true
+          git add docs/*.tex || true
+          git add docs/images/ || true
           if ! git diff --cached --quiet; then
             git commit -m "Update wiki documentation [${DATETIME}]"
             git push
