@@ -1,0 +1,79 @@
+name: WIDOCO Documentation
+
+on:
+  workflow_call:
+    inputs:
+      main_ontology: { required: true, type: string }
+      reasoner:      { required: false, type: string, default: "elk" }
+    secrets:
+      GH_TOKEN:      { required: false }
+
+permissions:
+  contents: read
+  pages: write           # needed for Pages deploy
+  id-token: write        # needed for Pages deploy OIDC
+
+jobs:
+
+  docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      # Install ROBOT for reasoning
+      - name: Install ROBOT
+        run: |
+          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
+          echo 'alias robot="java -jar $GITHUB_WORKSPACE/robot.jar"' >> $BASH_ENV
+          source $BASH_ENV
+
+      # Generate reasoned ontology for documentation
+      - name: Reasoning
+        run: |
+          mkdir -p reports
+          source $BASH_ENV
+          robot reason \
+            --input "${{ inputs.main_ontology }}" \
+            --reasoner "${{ inputs.reasoner }}" \
+            --equivalent-classes-allowed all \
+            --exclude-tautologies structural \
+            --output reports/reasoned.owl
+
+      # Install WIDOCO (doc generator)
+      - name: Install WIDOCO
+        run: |
+          curl -sL -o widoco.zip https://github.com/dgarijo/Widoco/releases/download/v1.4.20/widoco-1.4.20-jar-with-dependencies.jar.zip
+          unzip -q widoco.zip -d widoco
+          ls widoco > /dev/null
+
+      # Build docs from reasoned.owl (or fall back to main input if needed)
+      - name: Generate HTML docs with WIDOCO
+        run: |
+          REASONED="reports/reasoned.owl"
+          INPUT="${REASONED}"
+          if [ ! -f "$REASONED" ]; then INPUT="${{ inputs.main_ontology }}"; fi
+          java -jar widoco/*-with-dependencies.jar \
+            -ontFile "$INPUT" \
+            -outFolder site \
+            -rewriteAll \
+            -getOntologyMetadata \
+            -htaccess false \
+            -includeAnnotationProperties true
+
+      # Upload the static site as a Pages artifact
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      # Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

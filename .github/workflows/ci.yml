@@ -1,0 +1,87 @@
+name: Continuous Integration
+
+on:
+  workflow_call:
+    inputs:
+      main_ontology: { required: true, type: string }
+      shapes_glob:   { required: false, type: string, default: "shapes/**/*.ttl" }
+      data_glob:     { required: false, type: string, default: "data/**/*.ttl" }
+      reasoner:      { required: false, type: string, default: "elk" }
+    secrets:
+      GH_TOKEN:      { required: false }
+
+permissions:
+  contents: read
+
+jobs:
+
+  qa:
+    runs-on: ubuntu-latest
+    outputs:
+      reasoned_path: reports/reasoned.owl
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java for ROBOT
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      # Python for pySHACL
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install pyshacl==0.25.0 rdflib==7.0.0
+
+      # Install ROBOT (simple jar alias)
+      - name: Install ROBOT
+        run: |
+          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
+          echo 'alias robot="java -jar $GITHUB_WORKSPACE/robot.jar"' >> $BASH_ENV
+          source $BASH_ENV
+
+      - name: Verify syntax & imports
+        run: |
+          mkdir -p reports
+          source $BASH_ENV
+          robot verify --input "${{ inputs.main_ontology }}" --fail-on ERROR --output reports/verify.txt
+
+      - name: Reasoning & consistency
+        run: |
+          source $BASH_ENV
+          robot reason \
+            --input "${{ inputs.main_ontology }}" \
+            --reasoner "${{ inputs.reasoner }}" \
+            --equivalent-classes-allowed all \
+            --exclude-tautologies structural \
+            --output reports/reasoned.owl
+          echo "Reasoning OK" > reports/reasoning.txt
+
+      - name: Structural report
+        run: |
+          source $BASH_ENV
+          robot report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv
+
+      - name: SHACL validation (A-Box)
+        if: inputs.shapes_glob != ''
+        run: |
+          python - <<'PY'
+          import glob, subprocess, sys
+          shapes = glob.glob("${{ inputs.shapes_glob }}", recursive=True)
+          data   = glob.glob("${{ inputs.data_glob }}",   recursive=True)
+          failed = 0
+          for s in shapes or []:
+            cmd = ["pyshacl","-s",s]
+            if data:
+              for d in data:
+                rc = subprocess.call(cmd+["-d", d, "-o", "turtle", "-r", "both"])
+                failed |= (rc != 0)
+            else:
+              rc = subprocess.call(cmd+["-d","${{ inputs.main_ontology }}","-o","turtle","-r","both"])
+              failed |= (rc != 0)
+          sys.exit(failed)
+          PY
+
+      - name: Upload QA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
+          path: reports
