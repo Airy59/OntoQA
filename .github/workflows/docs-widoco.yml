@@ -70,6 +70,22 @@ jobs:
             exit 1
           fi
 
+      # Commit documentation to repository
+      - name: Commit documentation to repository
+        if: success()
+        run: |
+          mkdir -p docs/widoco
+          cp -r site/* docs/widoco/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/widoco/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update WIDOCO documentation [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
       # Upload the static site as a Pages artifact
       - name: Upload Pages artifact
         if: success()
