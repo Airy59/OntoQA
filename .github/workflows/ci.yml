@@ -31,23 +31,19 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install pyshacl==0.25.0 rdflib==7.0.0
 
-      # Install ROBOT (simple jar alias)
+      # Install ROBOT
       - name: Install ROBOT
         run: |
           curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
-          echo 'alias robot="java -jar $GITHUB_WORKSPACE/robot.jar"' >> $BASH_ENV
-          source $BASH_ENV
 
       - name: Verify syntax & imports
         run: |
           mkdir -p reports
-          source $BASH_ENV
-          robot verify --input "${{ inputs.main_ontology }}" --fail-on ERROR --output reports/verify.txt
+          java -jar robot.jar verify --input "${{ inputs.main_ontology }}" --fail-on ERROR --output reports/verify.txt
 
       - name: Reasoning & consistency
         run: |
-          source $BASH_ENV
-          robot reason \
+          java -jar robot.jar reason \
             --input "${{ inputs.main_ontology }}" \
             --reasoner "${{ inputs.reasoner }}" \
             --equivalent-classes-allowed all \
@@ -57,8 +53,7 @@ jobs:
 
       - name: Structural report
         run: |
-          source $BASH_ENV
-          robot report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv
+          java -jar robot.jar report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv
 
       - name: SHACL validation (A-Box)
         if: inputs.shapes_glob != ''

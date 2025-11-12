@@ -31,15 +31,12 @@ jobs:
       - name: Install ROBOT
         run: |
           curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
-          echo 'alias robot="java -jar $GITHUB_WORKSPACE/robot.jar"' >> $BASH_ENV
-          source $BASH_ENV
 
       # Generate reasoned ontology for documentation
       - name: Reasoning
         run: |
           mkdir -p reports
-          source $BASH_ENV
-          robot reason \
+          java -jar robot.jar reason \
             --input "${{ inputs.main_ontology }}" \
             --reasoner "${{ inputs.reasoner }}" \
             --equivalent-classes-allowed all \
