@@ -46,7 +46,9 @@ jobs:
       # Install WIDOCO (doc generator)
       - name: Install WIDOCO
         run: |
-          curl -sL -o widoco.jar https://github.com/dgarijo/Widoco/releases/download/v1.4.20/widoco-1.4.20-jar-with-dependencies.jar
+          curl -sL -o widoco.jar https://github.com/dgarijo/Widoco/releases/download/v1.4.25/widoco-1.4.25-jar-with-dependencies_JDK-17.jar
+          file widoco.jar
+          ls -lh widoco.jar
 
       # Build docs from reasoned.owl (or fall back to main input if needed)
       - name: Generate HTML docs with WIDOCO
