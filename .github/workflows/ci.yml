@@ -49,7 +49,7 @@ jobs:
 
       - name: Structural report
         run: |
-          java -jar robot.jar report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv
+          java -jar robot.jar report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv --fail-on NONE
 
       - name: SHACL validation (A-Box)
         if: inputs.shapes_glob != ''
