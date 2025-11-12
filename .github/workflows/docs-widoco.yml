@@ -46,9 +46,7 @@ jobs:
       # Install WIDOCO (doc generator)
       - name: Install WIDOCO
         run: |
-          curl -sL -o widoco.zip https://github.com/dgarijo/Widoco/releases/download/v1.4.20/widoco-1.4.20-jar-with-dependencies.jar.zip
-          unzip -q widoco.zip -d widoco
-          ls widoco > /dev/null
+          curl -sL -o widoco.jar https://github.com/dgarijo/Widoco/releases/download/v1.4.20/widoco-1.4.20-jar-with-dependencies.jar
 
       # Build docs from reasoned.owl (or fall back to main input if needed)
       - name: Generate HTML docs with WIDOCO
@@ -56,7 +54,7 @@ jobs:
           REASONED="reports/reasoned.owl"
           INPUT="${REASONED}"
           if [ ! -f "$REASONED" ]; then INPUT="${{ inputs.main_ontology }}"; fi
-          java -jar widoco/*-with-dependencies.jar \
+          java -jar widoco.jar \
             -ontFile "$INPUT" \
             -outFolder site \
             -rewriteAll \
