@@ -9,7 +9,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: read
+  contents: write
   pages: write           # needed for Pages deploy
   id-token: write        # needed for Pages deploy OIDC
 
@@ -22,7 +22,10 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout calling repo
+        uses: actions/checkout@v4
+        with:
+          path: calling-repo
 
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
@@ -35,13 +38,13 @@ jobs:
       # Generate reasoned ontology for documentation
       - name: Reasoning
         run: |
-          mkdir -p reports
+          mkdir -p calling-repo/reports
           java -jar robot.jar reason \
-            --input "${{ inputs.main_ontology }}" \
+            --input "calling-repo/${{ inputs.main_ontology }}" \
             --reasoner "${{ inputs.reasoner }}" \
             --equivalent-classes-allowed all \
             --exclude-tautologies structural \
-            --output reports/reasoned.owl
+            --output calling-repo/reports/reasoned.owl
 
       # Install WIDOCO (doc generator)
       - name: Install WIDOCO
@@ -53,21 +56,36 @@ jobs:
       # Build docs from reasoned.owl (or fall back to main input if needed)
       - name: Generate HTML docs with WIDOCO
         run: |
-          REASONED="reports/reasoned.owl"
+          REASONED="calling-repo/reports/reasoned.owl"
           INPUT="${REASONED}"
-          if [ ! -f "$REASONED" ]; then INPUT="${{ inputs.main_ontology }}"; fi
+          if [ ! -f "$REASONED" ]; then INPUT="calling-repo/${{ inputs.main_ontology }}"; fi
           echo "Generating documentation from: $INPUT"
           java -jar widoco.jar \
             -ontFile "$INPUT" \
-            -outFolder site \
+            -outFolder calling-repo/docs/widoco \
             -rewriteAll \
             -getOntologyMetadata \
             -includeAnnotationProperties || echo "WIDOCO command failed but continuing..."
-          echo "Checking site directory..."
-          ls -la site/ || echo "Site directory not created"
-          if [ ! -d "site" ]; then
-            echo "ERROR: WIDOCO did not create the site directory"
+          echo "Checking docs/widoco directory..."
+          ls -la calling-repo/docs/widoco/ || echo "docs/widoco directory not created"
+          if [ ! -d "calling-repo/docs/widoco" ]; then
+            echo "ERROR: WIDOCO did not create the docs/widoco directory"
             exit 1
+          fi
+
+      # Commit documentation to repository
+      - name: Commit documentation to repository
+        if: success()
+        run: |
+          cd calling-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/widoco/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update WIDOCO documentation [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
+            git push
+          else
+            echo "No changes to commit"
           fi
 
       # Upload the static site as a Pages artifact
@@ -75,7 +93,7 @@ jobs:
         if: success()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: calling-repo/docs/widoco
 
       # Deploy to GitHub Pages
       - name: Deploy to GitHub Pages

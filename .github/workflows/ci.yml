@@ -11,7 +11,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
 
@@ -20,7 +20,10 @@ jobs:
     outputs:
       reasoned_path: reports/reasoned.owl
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout calling repo
+        uses: actions/checkout@v4
+        with:
+          path: calling-repo
 
       # Java for ROBOT
       - uses: actions/setup-java@v4
@@ -38,18 +41,18 @@ jobs:
 
       - name: Reasoning & consistency
         run: |
-          mkdir -p reports
+          mkdir -p calling-repo/reports
           java -jar robot.jar reason \
-            --input "${{ inputs.main_ontology }}" \
+            --input "calling-repo/${{ inputs.main_ontology }}" \
             --reasoner "${{ inputs.reasoner }}" \
             --equivalent-classes-allowed all \
             --exclude-tautologies structural \
-            --output reports/reasoned.owl
-          echo "Reasoning OK" > reports/reasoning.txt
+            --output calling-repo/reports/reasoned.owl
+          echo "Reasoning OK" > calling-repo/reports/reasoning.txt
 
       - name: Structural report
         run: |
-          java -jar robot.jar report --input "${{ inputs.main_ontology }}" --output reports/robot-report.tsv --fail-on NONE
+          java -jar robot.jar report --input "calling-repo/${{ inputs.main_ontology }}" --output calling-repo/reports/robot-report.tsv --fail-on NONE
 
       - name: SHACL validation (A-Box)
         if: inputs.shapes_glob != ''
@@ -71,8 +74,21 @@ jobs:
           sys.exit(failed)
           PY
 
+      - name: Commit QA reports to repository
+        run: |
+          cd calling-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update QA reports [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
       - name: Upload QA artifacts
         uses: actions/upload-artifact@v4
         with:
           name: qa-reports
-          path: reports
+          path: calling-repo/reports
