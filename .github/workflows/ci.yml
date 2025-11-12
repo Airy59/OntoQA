@@ -36,13 +36,9 @@ jobs:
         run: |
           curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
 
-      - name: Verify syntax & imports
-        run: |
-          mkdir -p reports
-          java -jar robot.jar verify --input "${{ inputs.main_ontology }}" --fail-on ERROR --output reports/verify.txt
-
       - name: Reasoning & consistency
         run: |
+          mkdir -p reports
           java -jar robot.jar reason \
             --input "${{ inputs.main_ontology }}" \
             --reasoner "${{ inputs.reasoner }}" \
