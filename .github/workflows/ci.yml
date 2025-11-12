@@ -11,7 +11,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
 
@@ -75,6 +75,7 @@ jobs:
           PY
 
       - name: Commit QA reports to repository
+        continue-on-error: true
         run: |
           cd calling-repo
           git config user.name "github-actions[bot]"
@@ -82,7 +83,7 @@ jobs:
           git add reports/
           if ! git diff --cached --quiet; then
             git commit -m "Update QA reports [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
-            git push
+            git push || echo "Push failed - calling workflow may need 'contents: write' permission"
           else
             echo "No changes to commit"
           fi

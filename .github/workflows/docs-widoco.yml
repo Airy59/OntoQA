@@ -9,7 +9,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: write
+  contents: read
   pages: write           # needed for Pages deploy
   id-token: write        # needed for Pages deploy OIDC
 
@@ -76,6 +76,7 @@ jobs:
       # Commit documentation to repository
       - name: Commit documentation to repository
         if: success()
+        continue-on-error: true
         run: |
           cd calling-repo
           git config user.name "github-actions[bot]"
@@ -83,7 +84,7 @@ jobs:
           git add docs/widoco/
           if ! git diff --cached --quiet; then
             git commit -m "Update WIDOCO documentation [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
-            git push
+            git push || echo "Push failed - calling workflow may need 'contents: write' permission"
           else
             echo "No changes to commit"
           fi
