@@ -56,16 +56,24 @@ jobs:
           REASONED="reports/reasoned.owl"
           INPUT="${REASONED}"
           if [ ! -f "$REASONED" ]; then INPUT="${{ inputs.main_ontology }}"; fi
+          echo "Generating documentation from: $INPUT"
           java -jar widoco.jar \
             -ontFile "$INPUT" \
             -outFolder site \
             -rewriteAll \
             -getOntologyMetadata \
             -htaccess false \
-            -includeAnnotationProperties true
+            -includeAnnotationProperties true || echo "WIDOCO command failed but continuing..."
+          echo "Checking site directory..."
+          ls -la site/ || echo "Site directory not created"
+          if [ ! -d "site" ]; then
+            echo "ERROR: WIDOCO did not create the site directory"
+            exit 1
+          fi
 
       # Upload the static site as a Pages artifact
       - name: Upload Pages artifact
+        if: success()
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
