@@ -62,8 +62,7 @@ jobs:
             -outFolder site \
             -rewriteAll \
             -getOntologyMetadata \
-            -htaccess false \
-            -includeAnnotationProperties true || echo "WIDOCO command failed but continuing..."
+            -includeAnnotationProperties || echo "WIDOCO command failed but continuing..."
           echo "Checking site directory..."
           ls -la site/ || echo "Site directory not created"
           if [ ! -d "site" ]; then
