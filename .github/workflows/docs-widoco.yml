@@ -9,7 +9,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: read
+  contents: write
   pages: write           # needed for Pages deploy
   id-token: write        # needed for Pages deploy OIDC
 

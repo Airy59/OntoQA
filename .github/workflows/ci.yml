@@ -11,7 +11,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
 
