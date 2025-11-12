@@ -65,7 +65,10 @@ jobs:
             -outFolder calling-repo/docs/widoco \
             -rewriteAll \
             -getOntologyMetadata \
-            -includeAnnotationProperties || echo "WIDOCO command failed but continuing..."
+            -includeAnnotationProperties \
+            -includeImportedOntologies \
+            -webVowl \
+            -lang en || echo "WIDOCO command failed but continuing..."
           echo "Checking docs/widoco directory..."
           ls -la calling-repo/docs/widoco/ || echo "docs/widoco directory not created"
           if [ ! -d "calling-repo/docs/widoco" ]; then
