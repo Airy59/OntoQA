@@ -67,6 +67,12 @@ jobs:
             -getOntologyMetadata \
             -includeAnnotationProperties \
             -includeImportedOntologies \
+            -includeOverview \
+            -includeDescription \
+            -includeCrossReferenceSection \
+            -includeReferences \
+            -includeNamedIndividuals \
+            -uniteSections \
             -webVowl \
             -lang en || echo "WIDOCO command failed but continuing..."
           echo "Checking docs/widoco directory..."
@@ -97,7 +103,7 @@ jobs:
         if: success()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: calling-repo/docs/widoco
+          path: calling-repo/docs/widoco/doc
 
       # Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
