@@ -60,6 +60,10 @@ jobs:
           INPUT="${REASONED}"
           if [ ! -f "$REASONED" ]; then INPUT="calling-repo/${{ inputs.main_ontology }}"; fi
           echo "Generating documentation from: $INPUT"
+          echo "Input file details:"
+          ls -lh "$INPUT" || echo "Could not stat $INPUT"
+          echo "First 40 lines of the ontology:"
+          head -n 40 "$INPUT" || echo "Cannot read $INPUT"
           java -jar widoco.jar \
             -ontFile "$INPUT" \
             -outFolder calling-repo/docs/widoco \
