@@ -69,8 +69,8 @@ jobs:
             -outFolder calling-repo/docs/widoco \
             -rewriteAll \
             -getOntologyMetadata \
-            -includeClasses \
-            -includeProperties \
+            -oops \
+            -rewriteAll \
             -includeAnnotationProperties \
             -includeImportedOntologies \
             -includeOverview \
@@ -80,6 +80,7 @@ jobs:
             -includeNamedIndividuals \
             -uniteSections \
             -webVowl \
+            -licensius \
             -lang en || echo "WIDOCO command failed but continuing..."
           echo "Checking docs/widoco directory..."
           ls -la calling-repo/docs/widoco/ || echo "docs/widoco directory not created"
