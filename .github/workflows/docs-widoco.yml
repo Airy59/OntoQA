@@ -72,7 +72,6 @@ jobs:
             -rewriteAll \
             -includeAnnotationProperties \
             -includeImportedOntologies \
-            -includeOverview \
             -includeDescription \
             -includeCrossReferenceSection \
             -includeReferences \
