@@ -69,7 +69,6 @@ jobs:
             -outFolder calling-repo/docs/widoco \
             -rewriteAll \
             -getOntologyMetadata \
-            -oops \
             -rewriteAll \
             -includeAnnotationProperties \
             -includeImportedOntologies \
