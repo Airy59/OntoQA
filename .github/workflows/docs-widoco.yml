@@ -64,17 +64,17 @@ jobs:
           ls -lh "$INPUT" || echo "Could not stat $INPUT"
           echo "First 40 lines of the ontology:"
           head -n 40 "$INPUT" || echo "Cannot read $INPUT"
-          java -jar widoco.jar \
+          java -Xmx2G -jar widoco.jar \
             -ontFile "$INPUT" \
             -outFolder calling-repo/docs/widoco \
             -rewriteAll \
             -getOntologyMetadata \
-            -rewriteAll \
             -includeAnnotationProperties \
             -includeImportedOntologies \
             -includeCrossReferenceSection \
             -includeReferences \
             -includeNamedIndividuals \
+            -noPlaceHolderText \
             -uniteSections \
             -webVowl \
             -licensius \
