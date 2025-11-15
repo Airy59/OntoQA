@@ -71,7 +71,6 @@ jobs:
             -getOntologyMetadata \
             -includeAnnotationProperties \
             -includeImportedOntologies \
-            -includeReferences \
             -includeNamedIndividuals \
             -noPlaceHolderText \
             -uniteSections \
