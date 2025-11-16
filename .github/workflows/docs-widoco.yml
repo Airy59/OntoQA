@@ -75,6 +75,7 @@ jobs:
             -uniteSections \
             -webVowl \
             -licensius \
+            -doNotOverWriteConf \
             -lang en || echo "WIDOCO command failed but continuing..."
           echo "Checking docs/widoco directory..."
           ls -la calling-repo/docs/widoco/ || echo "docs/widoco directory not created"
