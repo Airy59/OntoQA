@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-qa-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
 
   qa:
