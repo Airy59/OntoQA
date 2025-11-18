@@ -9,7 +9,7 @@ on:
       GH_TOKEN:      { required: false }
 
 permissions:
-  contents: read
+  contents: write
   pages: write           # needed for Pages deploy
   id-token: write        # needed for Pages deploy OIDC
 
@@ -79,7 +79,6 @@ jobs:
             -uniteSections \
             -webVowl \
             -licensius \
-            -doNotOverWriteConf \
             -lang en || echo "WIDOCO command failed but continuing..."
           echo "Checking docs/widoco directory..."
           ls -la calling-repo/docs/widoco/ || echo "docs/widoco directory not created"

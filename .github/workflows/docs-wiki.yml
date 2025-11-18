@@ -46,10 +46,37 @@ jobs:
           path: calling-repo
 
       - name: Checkout wiki repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository }}.wiki
-          path: wiki
+        run: |
+          # Try to clone the wiki repository
+          # Use authentication token if available for private wikis
+          if [ -n "${{ secrets.GH_TOKEN }}" ]; then
+            echo "Using authenticated access for wiki"
+            git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null || \
+            git clone https://github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null || {
+              echo "::warning::Wiki repository not found or not accessible."
+              echo "The wiki may not be initialized yet, or it may be private and require a GH_TOKEN secret."
+              echo "To fix this:"
+              echo "1. Ensure the wiki is enabled in repository settings"
+              echo "2. Create at least one wiki page"
+              echo "3. For private repos, add a GH_TOKEN secret with repo scope"
+              mkdir -p wiki
+              echo "# No Wiki Content" > wiki/Home.md
+              echo "The wiki repository could not be accessed. Please initialize the wiki first." >> wiki/Home.md
+            }
+          else
+            echo "Attempting public wiki access"
+            git clone https://github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null || {
+              echo "::warning::Wiki repository not found or not accessible."
+              echo "The wiki may not be initialized yet."
+              echo "To fix this:"
+              echo "1. Ensure the wiki is enabled in repository settings"
+              echo "2. Create at least one wiki page"
+              echo "3. For private repos, add a GH_TOKEN secret with repo scope"
+              mkdir -p wiki
+              echo "# No Wiki Content" > wiki/Home.md
+              echo "The wiki repository could not be accessed. Please initialize the wiki first." >> wiki/Home.md
+            }
+          fi
 
       - name: Checkout OntoQA for script
         uses: actions/checkout@v4
