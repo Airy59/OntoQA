@@ -43,6 +43,74 @@ jobs:
         run: |
           curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
 
+      - name: OWL Profile Validation
+        continue-on-error: true
+        run: |
+          mkdir -p calling-repo/reports
+          
+          # Initialize the profiles report
+          cat > calling-repo/reports/profiles.md <<EOF
+          # OWL Profile Validation Report
+          
+          **Ontology**: ${{ inputs.main_ontology }}
+          **Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          ---
+          
+          EOF
+          
+          # Validate against OWL2 DL profile
+          echo "## OWL2 DL Profile" >> calling-repo/reports/profiles.md
+          echo "" >> calling-repo/reports/profiles.md
+          if java -jar robot.jar validate-profile --profile DL \
+            --input "calling-repo/${{ inputs.main_ontology }}" \
+            --output calling-repo/reports/profile-dl-validation.txt 2>&1; then
+            echo "✅ **Status**: PASSED" >> calling-repo/reports/profiles.md
+            echo "" >> calling-repo/reports/profiles.md
+            if [ -f calling-repo/reports/profile-dl-validation.txt ]; then
+              echo '```' >> calling-repo/reports/profiles.md
+              cat calling-repo/reports/profile-dl-validation.txt >> calling-repo/reports/profiles.md
+              echo '```' >> calling-repo/reports/profiles.md
+            fi
+          else
+            echo "⚠️ **Status**: VIOLATIONS DETECTED" >> calling-repo/reports/profiles.md
+            echo "" >> calling-repo/reports/profiles.md
+            if [ -f calling-repo/reports/profile-dl-validation.txt ]; then
+              echo '```' >> calling-repo/reports/profiles.md
+              cat calling-repo/reports/profile-dl-validation.txt >> calling-repo/reports/profiles.md
+              echo '```' >> calling-repo/reports/profiles.md
+            fi
+          fi
+          echo "" >> calling-repo/reports/profiles.md
+          
+          # Validate against OWL2 RL profile
+          echo "## OWL2 RL Profile" >> calling-repo/reports/profiles.md
+          echo "" >> calling-repo/reports/profiles.md
+          if java -jar robot.jar validate-profile --profile RL \
+            --input "calling-repo/${{ inputs.main_ontology }}" \
+            --output calling-repo/reports/profile-rl-validation.txt 2>&1; then
+            echo "✅ **Status**: PASSED" >> calling-repo/reports/profiles.md
+            echo "" >> calling-repo/reports/profiles.md
+            if [ -f calling-repo/reports/profile-rl-validation.txt ]; then
+              echo '```' >> calling-repo/reports/profiles.md
+              cat calling-repo/reports/profile-rl-validation.txt >> calling-repo/reports/profiles.md
+              echo '```' >> calling-repo/reports/profiles.md
+            fi
+          else
+            echo "⚠️ **Status**: VIOLATIONS DETECTED" >> calling-repo/reports/profiles.md
+            echo "" >> calling-repo/reports/profiles.md
+            if [ -f calling-repo/reports/profile-rl-validation.txt ]; then
+              echo '```' >> calling-repo/reports/profiles.md
+              cat calling-repo/reports/profile-rl-validation.txt >> calling-repo/reports/profiles.md
+              echo '```' >> calling-repo/reports/profiles.md
+            fi
+          fi
+          
+          # Clean up temporary validation files
+          rm -f calling-repo/reports/profile-dl-validation.txt calling-repo/reports/profile-rl-validation.txt
+          
+          echo "Profile validation completed - see reports/profiles.md for details"
+
       - name: Reasoning & consistency
         run: |
           mkdir -p calling-repo/reports
