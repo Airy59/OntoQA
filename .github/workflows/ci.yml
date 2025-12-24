@@ -28,6 +28,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: calling-repo
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       # Java for ROBOT
       - uses: actions/setup-java@v4
