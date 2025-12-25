@@ -149,15 +149,22 @@ jobs:
           PY
 
       - name: Commit QA reports to repository
-        continue-on-error: true
         run: |
           cd calling-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Show what reports were generated
+          echo "Generated reports:"
+          ls -la reports/ || echo "No reports directory found"
+          
           git add reports/
+          
           if ! git diff --cached --quiet; then
+            echo "Committing reports..."
             git commit -m "Update QA reports [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
-            git push || echo "Push failed - calling workflow may need 'contents: write' permission"
+            echo "Pushing reports to repository..."
+            git push
           else
             echo "No changes to commit"
           fi
