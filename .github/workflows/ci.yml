@@ -43,7 +43,7 @@ jobs:
       # Install ROBOT
       - name: Install ROBOT
         run: |
-          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
+          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.8/robot.jar
 
       - name: OWL Profile Validation
         continue-on-error: true
@@ -154,6 +154,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
+          # Configure merge strategy to prefer our reports
+          git config pull.rebase true
+          git config rebase.autoStash true
+          
           # Show what reports were generated
           echo "Generated reports:"
           ls -la reports/ || echo "No reports directory found"
@@ -163,10 +167,34 @@ jobs:
           if ! git diff --cached --quiet; then
             echo "Committing reports..."
             git commit -m "Update QA reports [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
-            echo "Pulling latest changes before push..."
-            git pull --rebase origin ${{ github.ref_name }}
-            echo "Pushing reports to repository..."
-            git push
+            
+            # Retry logic for push with rebase
+            MAX_RETRIES=5
+            RETRY_COUNT=0
+            PUSH_SUCCESS=false
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Pulling latest changes..."
+              if git pull --rebase origin ${{ github.ref_name }} --strategy-option=ours; then
+                echo "Pushing reports to repository..."
+                if git push; then
+                  echo "Push successful!"
+                  PUSH_SUCCESS=true
+                  break
+                else
+                  echo "Push failed, retrying..."
+                fi
+              else
+                echo "Rebase failed, retrying..."
+              fi
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              sleep $((2 ** RETRY_COUNT))  # Exponential backoff
+            done
+            
+            if [ "$PUSH_SUCCESS" = false ]; then
+              echo "Failed to push after $MAX_RETRIES attempts"
+              exit 1
+            fi
           else
             echo "No changes to commit"
           fi
