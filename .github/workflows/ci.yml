@@ -163,6 +163,8 @@ jobs:
           if ! git diff --cached --quiet; then
             echo "Committing reports..."
             git commit -m "Update QA reports [$(date -u +"%Y-%m-%d %H:%M:%S UTC")]"
+            echo "Pulling latest changes before push..."
+            git pull --rebase origin ${{ github.ref_name }}
             echo "Pushing reports to repository..."
             git push
           else
