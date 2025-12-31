@@ -43,7 +43,7 @@ jobs:
       # Install ROBOT
       - name: Install ROBOT
         run: |
-          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.7/robot.jar
+          curl -sL -o robot.jar https://github.com/ontodev/robot/releases/download/v1.9.8/robot.jar
 
       - name: OWL Profile Validation
         continue-on-error: true
