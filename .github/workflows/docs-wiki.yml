@@ -202,74 +202,133 @@ jobs:
           echo "Generated files:"
           ls -lh "calling-repo/${DOCS_DIR}"/*.pdf "calling-repo/${DOCS_DIR}"/*.tex 2>/dev/null || true
 
-      - name: Commit & push changes
+      - name: Generate, commit & push docs safely
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "DOCS-WIKI VERSION 2026-03-13-C"
+          echo "DOCS-WIKI VERSION 2026-03-13-E"
 
-          DATETIME="${{ steps.timestamp.outputs.datetime }}"
-          DOCS_DIR="${{ inputs.docs_dir || 'docs/from-wiki' }}"
           TARGET_BRANCH="${{ github.ref_name }}"
+          DOCS_DIR="${{ inputs.docs_dir || 'docs/from-wiki' }}"
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
 
           cd calling-repo
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config pull.rebase true
-          git config rebase.autoStash true
 
-          echo "Current branch: ${TARGET_BRANCH}"
-          echo "Current HEAD before staging:"
-          git log --oneline -n 3 || true
-          echo "Remote refs:"
-          git ls-remote --heads origin "${TARGET_BRANCH}" || true
+          generate_docs () {
+            DATETIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-          echo "Repository status before staging:"
-          git status --short || true
+            rm -rf "${DOCS_DIR}"
+            mkdir -p "${DOCS_DIR}/images"
 
-          git add "${DOCS_DIR}"/*.md 2>/dev/null || true
-          git add "${DOCS_DIR}"/*.pdf 2>/dev/null || true
-          git add "${DOCS_DIR}"/*.tex 2>/dev/null || true
-          git add "${DOCS_DIR}/images/" 2>/dev/null || true
+            echo "Generating version with embedded images..."
+            python ../ontoqa/scripts/docs-wiki.py \
+              --wiki-dir ../wiki \
+              --out "${DOCS_DIR}/${REPO_NAME}.md" \
+              --repo "${{ github.repository }}" \
+              --embed-images \
+              --timestamp "${DATETIME}"
 
-          echo "Repository status after staging:"
-          git status --short || true
+            echo "Generating version with image subfolder..."
+            python ../ontoqa/scripts/docs-wiki.py \
+              --wiki-dir ../wiki \
+              --out "${DOCS_DIR}/${REPO_NAME}.md" \
+              --repo "${{ github.repository }}" \
+              --timestamp "${DATETIME}"
 
-          if ! git diff --cached --quiet; then
-            git commit -m "Update wiki documentation [${DATETIME}]"
+            cd "${DOCS_DIR}"
 
-            MAX_RETRIES=5
-            RETRY_COUNT=0
-            PUSH_SUCCESS=false
-
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              ATTEMPT=$((RETRY_COUNT + 1))
-              echo "Attempt ${ATTEMPT}/${MAX_RETRIES}: syncing with origin/${TARGET_BRANCH}"
-
-              git fetch origin "${TARGET_BRANCH}"
-
-              if git pull --rebase origin "${TARGET_BRANCH}"; then
-                echo "Rebase successful, pushing..."
-                if git push origin "HEAD:${TARGET_BRANCH}"; then
-                  echo "Push successful."
-                  PUSH_SUCCESS=true
-                  break
-                else
-                  echo "Push failed."
-                fi
-              else
-                echo "Pull --rebase failed."
-              fi
-
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-              sleep $((2 ** RETRY_COUNT))
-            done
-
-            if [ "${PUSH_SUCCESS}" != "true" ]; then
-              echo "::error::Failed to push documentation after ${MAX_RETRIES} attempts."
+            if [ -f "${REPO_NAME}_with_subfolder.md" ]; then
+              SOURCE_MD="${REPO_NAME}_with_subfolder.md"
+            elif [ -f "${REPO_NAME}.md" ]; then
+              SOURCE_MD="${REPO_NAME}.md"
+            else
+              echo "::error::No markdown source file found for PDF/LaTeX generation."
+              ls -la
               exit 1
             fi
-          else
-            echo "No changes to commit"
+
+            echo "Using source markdown: ${SOURCE_MD}"
+
+            pandoc "${SOURCE_MD}" \
+              -o "${REPO_NAME}.pdf" \
+              --pdf-engine=xelatex \
+              --toc \
+              --number-sections \
+              --metadata title="${REPO_NAME} Wiki Documentation" \
+              --from markdown-yaml_metadata_block+pipe_tables-simple_tables-multiline_tables-grid_tables \
+              --resource-path=.:images \
+              --variable geometry:margin=1in \
+              --variable fontsize=11pt \
+              --variable documentclass=article \
+              --variable linestretch=1.2 \
+              --variable linkcolor=blue \
+              --variable urlcolor=blue || echo "PDF generation had warnings but may have succeeded"
+
+            pandoc "${SOURCE_MD}" \
+              -o "${REPO_NAME}.tex" \
+              --standalone \
+              --toc \
+              --number-sections \
+              --metadata title="${REPO_NAME} Wiki Documentation" \
+              --from markdown-yaml_metadata_block+pipe_tables-simple_tables-multiline_tables-grid_tables \
+              --resource-path=.:images \
+              --variable geometry:margin=1in \
+              --variable fontsize=11pt \
+              --variable documentclass=article \
+              --variable linestretch=1.2 \
+              --variable linkcolor=blue \
+              --variable urlcolor=blue
+
+            cd ../..
+          }
+
+          MAX_RETRIES=4
+          RETRY_COUNT=0
+          PUSH_SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            ATTEMPT=$((RETRY_COUNT + 1))
+            echo "Attempt ${ATTEMPT}/${MAX_RETRIES}"
+
+            # Clean any failed rebase state from a previous attempt
+            git rebase --abort 2>/dev/null || true
+            git merge --abort 2>/dev/null || true
+
+            # Start from the latest remote branch tip
+            git fetch origin "${TARGET_BRANCH}"
+            git checkout "${TARGET_BRANCH}"
+            git reset --hard "origin/${TARGET_BRANCH}"
+            git clean -fd
+
+            # Rebuild everything from scratch from current wiki contents
+            generate_docs
+
+            git add "${DOCS_DIR}"
+
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+              PUSH_SUCCESS=true
+              break
+            fi
+
+            DATETIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            git commit -m "Update wiki documentation [${DATETIME}]"
+
+            if git push origin "HEAD:${TARGET_BRANCH}"; then
+              echo "Push successful."
+              PUSH_SUCCESS=true
+              break
+            fi
+
+            echo "Push lost race; retrying from fresh remote state."
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            sleep $((2 ** RETRY_COUNT))
+          done
+
+          if [ "${PUSH_SUCCESS}" != "true" ]; then
+            echo "::error::Failed to push documentation after ${MAX_RETRIES} attempts."
+            exit 1
           fi
