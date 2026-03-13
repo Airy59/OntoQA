@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ci-qa-${{ github.ref }}
+  group: repo-write-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
