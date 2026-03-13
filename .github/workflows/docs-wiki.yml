@@ -4,30 +4,31 @@ on:
   workflow_call:
     inputs:
       diagrams_path:
-        description: 'Path glob pattern for diagram images to trigger on'
+        description: "Path glob pattern for diagram images to trigger on"
         required: false
         type: string
-        default: 'Graphol/diagrams/**'
+        default: "Graphol/diagrams/**"
       docs_dir:
-       description: 'Output directory for generated docs'
-       required: false
-       type: string
-       default: 'docs/from-wiki'
+        description: "Output directory for generated docs"
+        required: false
+        type: string
+        default: "docs/from-wiki"
     secrets:
       GH_TOKEN:
         required: false
+
   workflow_dispatch:
     inputs:
       diagrams_path:
-        description: 'Path glob pattern for diagram images to trigger on'
+        description: "Path glob pattern for diagram images to trigger on"
         required: false
         type: string
-        default: 'Graphol/diagrams/**'
+        default: "Graphol/diagrams/**"
       docs_dir:
-       description: 'Output directory for generated docs'
-       required: false
-       type: string
-       default: 'docs/from-wiki'
+        description: "Output directory for generated docs"
+        required: false
+        type: string
+        default: "docs/from-wiki"
 
 permissions:
   contents: write
@@ -39,20 +40,23 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout calling repo
         uses: actions/checkout@v4
         with:
           path: calling-repo
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Checkout wiki repo
         run: |
-          # Try to clone the wiki repository
-          # Use authentication token if available for private wikis
+          set -e
+
           if [ -n "${{ secrets.GH_TOKEN }}" ]; then
             echo "Using authenticated access for wiki"
-            git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null || \
-            git clone https://github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null || {
+            git clone "https://${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.wiki.git" wiki 2>/dev/null || \
+            git clone "https://github.com/${{ github.repository }}.wiki.git" wiki 2>/dev/null || {
               echo "::warning::Wiki repository not found or not accessible."
               echo "The wiki may not be initialized yet, or it may be private and require a GH_TOKEN secret."
               echo "To fix this:"
@@ -60,12 +64,15 @@ jobs:
               echo "2. Create at least one wiki page"
               echo "3. For private repos, add a GH_TOKEN secret with repo scope"
               mkdir -p wiki
-              echo "# No Wiki Content" > wiki/Home.md
-              echo "The wiki repository could not be accessed. Please initialize the wiki first." >> wiki/Home.md
+              {
+                echo "# No Wiki Content"
+                echo
+                echo "The wiki repository could not be accessed. Please initialize the wiki first."
+              } > wiki/Home.md
             }
           else
             echo "Attempting public wiki access"
-            git clone https://github.com/${{ github.repository }}.wiki.git wiki 2>/dev/null || {
+            git clone "https://github.com/${{ github.repository }}.wiki.git" wiki 2>/dev/null || {
               echo "::warning::Wiki repository not found or not accessible."
               echo "The wiki may not be initialized yet."
               echo "To fix this:"
@@ -73,8 +80,11 @@ jobs:
               echo "2. Create at least one wiki page"
               echo "3. For private repos, add a GH_TOKEN secret with repo scope"
               mkdir -p wiki
-              echo "# No Wiki Content" > wiki/Home.md
-              echo "The wiki repository could not be accessed. Please initialize the wiki first." >> wiki/Home.md
+              {
+                echo "# No Wiki Content"
+                echo
+                echo "The wiki repository could not be accessed. Please initialize the wiki first."
+              } > wiki/Home.md
             }
           fi
 
@@ -89,27 +99,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Generate timestamp for version info
         id: timestamp
         run: |
           DATETIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          echo "datetime=${DATETIME}" >> $GITHUB_OUTPUT
+          echo "datetime=${DATETIME}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate both versions
+      - name: Generate wiki documentation
         run: |
+          set -e
+
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           DATETIME="${{ steps.timestamp.outputs.datetime }}"
-          DOCS_DIR="${{ inputs.docs_dir || 'docs' }}"
-          
-          # Create docs directory in calling repo
+          DOCS_DIR="${{ inputs.docs_dir || 'docs/from-wiki' }}"
+
           mkdir -p "calling-repo/${DOCS_DIR}"
-          
-          # Clear images directory to avoid duplicates
           rm -rf "calling-repo/${DOCS_DIR}/images"
           mkdir -p "calling-repo/${DOCS_DIR}/images"
-          
+
           echo "Generating version with embedded images..."
           python ontoqa/scripts/docs-wiki.py \
             --wiki-dir wiki \
@@ -117,16 +126,16 @@ jobs:
             --repo "${{ github.repository }}" \
             --embed-images \
             --timestamp "${DATETIME}"
-          
+
           echo "Generating version with image subfolder..."
           python ontoqa/scripts/docs-wiki.py \
             --wiki-dir wiki \
             --out "calling-repo/${DOCS_DIR}/${REPO_NAME}.md" \
             --repo "${{ github.repository }}" \
             --timestamp "${DATETIME}"
-          
-          echo "Generated files:"
-          ls -lh "calling-repo/${DOCS_DIR}/${REPO_NAME}"*.md
+
+          echo "Generated markdown files:"
+          ls -lh "calling-repo/${DOCS_DIR}/"*.md 2>/dev/null || true
 
       - name: Install Pandoc and LaTeX
         run: |
@@ -135,13 +144,26 @@ jobs:
 
       - name: Generate PDF and LaTeX
         run: |
+          set -e
+
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          DOCS_DIR="${{ inputs.docs_dir || 'docs' }}"
+          DOCS_DIR="${{ inputs.docs_dir || 'docs/from-wiki' }}"
           cd "calling-repo/${DOCS_DIR}"
-          
-          # Generate PDF
+
+          if [ -f "${REPO_NAME}_with_subfolder.md" ]; then
+            SOURCE_MD="${REPO_NAME}_with_subfolder.md"
+          elif [ -f "${REPO_NAME}.md" ]; then
+            SOURCE_MD="${REPO_NAME}.md"
+          else
+            echo "::error::No markdown source file found for PDF/LaTeX generation."
+            ls -la
+            exit 1
+          fi
+
+          echo "Using source markdown: ${SOURCE_MD}"
+
           echo "Generating PDF..."
-          pandoc "${REPO_NAME}_with_subfolder.md" \
+          pandoc "${SOURCE_MD}" \
             -o "${REPO_NAME}.pdf" \
             --pdf-engine=xelatex \
             --toc \
@@ -156,10 +178,9 @@ jobs:
             --variable linkcolor=blue \
             --variable urlcolor=blue \
             || echo "PDF generation had warnings but may have succeeded"
-          
-          # Generate LaTeX
+
           echo "Generating LaTeX..."
-          pandoc "${REPO_NAME}_with_subfolder.md" \
+          pandoc "${SOURCE_MD}" \
             -o "${REPO_NAME}.tex" \
             --standalone \
             --toc \
@@ -173,25 +194,70 @@ jobs:
             --variable linestretch=1.2 \
             --variable linkcolor=blue \
             --variable urlcolor=blue
-          
+
           cd ../..
           echo "Generated files:"
           ls -lh "calling-repo/${DOCS_DIR}"/*.pdf "calling-repo/${DOCS_DIR}"/*.tex 2>/dev/null || true
 
       - name: Commit & push changes
         run: |
+          set -e
+
           DATETIME="${{ steps.timestamp.outputs.datetime }}"
-          DOCS_DIR="${{ inputs.docs_dir || 'docs' }}"
+          DOCS_DIR="${{ inputs.docs_dir || 'docs/from-wiki' }}"
+          TARGET_BRANCH="${{ github.ref_name }}"
+
           cd calling-repo
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${DOCS_DIR}"/*.md || true
-          git add "${DOCS_DIR}"/*.pdf || true
-          git add "${DOCS_DIR}"/*.tex || true
-          git add "${DOCS_DIR}"/images/ || true
+          git config pull.rebase true
+          git config rebase.autoStash true
+
+          echo "Current branch: ${TARGET_BRANCH}"
+          echo "Repository status before staging:"
+          git status --short || true
+
+          git add "${DOCS_DIR}"/*.md 2>/dev/null || true
+          git add "${DOCS_DIR}"/*.pdf 2>/dev/null || true
+          git add "${DOCS_DIR}"/*.tex 2>/dev/null || true
+          git add "${DOCS_DIR}/images/" 2>/dev/null || true
+
+          echo "Repository status after staging:"
+          git status --short || true
+
           if ! git diff --cached --quiet; then
             git commit -m "Update wiki documentation [${DATETIME}]"
-            git push
+
+            MAX_RETRIES=5
+            RETRY_COUNT=0
+            PUSH_SUCCESS=false
+
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              ATTEMPT=$((RETRY_COUNT + 1))
+              echo "Attempt ${ATTEMPT}/${MAX_RETRIES}: syncing with origin/${TARGET_BRANCH}"
+
+              if git pull --rebase origin "${TARGET_BRANCH}"; then
+                echo "Rebase successful, pushing..."
+                if git push origin "HEAD:${TARGET_BRANCH}"; then
+                  echo "Push successful."
+                  PUSH_SUCCESS=true
+                  break
+                else
+                  echo "Push failed."
+                fi
+              else
+                echo "Pull --rebase failed."
+              fi
+
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              sleep $((2 ** RETRY_COUNT))
+            done
+
+            if [ "${PUSH_SUCCESS}" != "true" ]; then
+              echo "::error::Failed to push documentation after ${MAX_RETRIES} attempts."
+              exit 1
+            fi
           else
             echo "No changes to commit"
           fi
